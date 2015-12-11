@@ -1,0 +1,115 @@
+bundle:
+  overrides:
+    openstack-origin: "cloud:trusty-liberty"
+  default: true
+  relations:
+    # keystone
+    - [keystone, mysql]
+    - [keystone, glance]
+    - [keystone, neutron-api]
+    - [keystone, nova-cloud-controller]
+    - [keystone,  openstack-dashboard]
+    # glance
+    - [glance, mysql]
+    - [glance, nova-cloud-controller]
+    - [glance, nova-compute]
+    # neutron-api
+    - [neutron-api, mysql]
+    - [neutron-api, rabbitmq-server]
+    - [neutron-api, neutron-gateway]
+    - [neutron-api, nova-cloud-controller]
+    # neutron-gateway
+    - [neutron-gateway, mysql]
+    - [neutron-gateway, nova-cloud-controller]
+    - ['neutron-gateway:amqp', rabbitmq-server]
+    # nova-cloud-controller
+    - [nova-cloud-controller, mysql]
+    - [nova-cloud-controller, rabbitmq-server]
+    # nova-compute
+    - [nova-compute, rabbitmq-server]
+    - [nova-cloud-controller, neutron-openvswitch]
+    # neutron-openvswitch
+    - [neutron-openvswitch, rabbitmq-server]
+    # kvm-openvswitch
+    - [kvm-openvswitch, nova-compute]
+    - [kvm-openvswitch, rabbitmq-server]
+    - [kvm-openvswitch, neutron-api]
+  series: trusty
+  services:
+    mysql:
+      charm: local:trusty/mysql
+      branch: lp:~ionutbalutoiu/charms/trusty/mysql/trunk
+      constraints: "mem=3G cpu-cores=2 root-disk=80G"
+    rabbitmq-server:
+      charm: local:trusty/rabbitmq-server
+      branch: lp:charms/trusty/rabbitmq-server
+      to:
+        - mysql=0
+    keystone:
+      charm: local:trusty/keystone
+      branch: lp:~openstack-charmers/charms/trusty/keystone/next
+      options:
+        admin-password: "Passw0rd"
+        admin-user: "admin"
+        keystone-service-admin-role: "admin"
+        keystone-admin-role: "admin"
+        admin-role: "admin"
+      to:
+        - lxc:mysql
+    glance:
+      charm: local:trusty/glance
+      branch: lp:~ionutbalutoiu/charms/trusty/glance/next
+      options:
+        worker-multiplier: 1
+      to:
+        - lxc:mysql
+    neutron-api:
+      charm: local:trusty/neutron-api
+      branch: lp:charms/trusty/neutron-api
+      options:
+        network-device-mtu: 1450
+        neutron-security-groups: True
+        worker-multiplier: 1
+        overlay-network-type: "vxlan"
+        flat-network-providers: "physnet2"
+      to:
+        - lxc:mysql
+    neutron-gateway:
+      charm: local:trusty/neutron-gateway
+      branch: lp:~openstack-charmers/charms/trusty/neutron-gateway/next
+      options:
+        plugin: "ovs"
+        instance-mtu: 1450
+        bridge-mappings: "physnet0:br-ex physnet1:br-data"
+        data-port: "br-data:eth1 br-ex:eth2"
+        vlan-ranges: "physnet1:1000:2000"
+      to:
+        - mysql=0
+    nova-cloud-controller:
+      charm: local:trusty/nova-cloud-controller
+      branch: lp:charms/trusty/nova-cloud-controller
+      options:
+        worker-multiplier: 1
+        network-manager: "Neutron"
+      to:
+        - lxc:mysql
+    nova-compute:
+      charm: local:trusty/nova-compute
+      branch: lp:charms/nova-compute
+      constraints: "mem=2G cpu-cores=2 root-disk=50G"
+      options:
+        config-flags: "vncserver_listen=0.0.0.0,vnc_enabled=True"
+    kvm-openvswitch:
+      charm: local:trusty/neutron-openvswitch
+      branch: lp:charms/neutron-openvswitch
+      options:
+        bridge-mappings: "physnet1:br-data"
+        data-port: "br-data:eth1"
+        vlan-ranges: "physnet1:1000:2000"
+    openstack-dashboard:
+      charm: local:trusty/openstack-dashboard
+      branch: lp:charms/trusty/openstack-dashboard
+      options:
+        ubuntu-theme: "no"
+      to:
+        - lxc:mysql

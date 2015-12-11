@@ -1,0 +1,148 @@
+bundle:
+  overrides:
+    openstack-origin: "cloud:trusty-liberty"
+  default: true
+  relations:
+   # keystone
+    - [keystone, mysql]
+    - [keystone, nova-cloud-controller]
+    - [keystone, glance]
+    - [keystone, openstack-dashboard]
+    - [keystone, neutron-api]
+   # nova-cloud-controller
+    - [nova-cloud-controller, mysql]
+    - [nova-cloud-controller, glance]
+    - [nova-cloud-controller, rabbitmq-server]
+    - [nova-cloud-controller, neutron-gateway]
+    - [nova-cloud-controller, neutron-api]
+   # neutron-gateway
+    - [neutron-gateway, mysql]
+    - [neutron-gateway, neutron-api]
+    - ['neutron-gateway:amqp', rabbitmq-server]
+   # glance
+    - [glance, mysql]
+   # neutron-api
+    - [neutron-api, mysql]
+    - [neutron-api, rabbitmq-server]
+   # ironic
+    - [ironic, keystone]
+    - [ironic, mysql]
+    - [ironic, rabbitmq-server]
+    - [ironic, glance]
+    - [ironic, neutron-api]
+    - [ironic, nova-compute-ironic]
+   # nova-compute-ironic 
+    - [nova-compute-ironic, nova-cloud-controller]
+    - [nova-compute-ironic, rabbitmq-server]
+   # swift
+    - [swift-proxy, ironic]
+    - [swift-proxy, keystone]
+    - [swift-proxy, swift-storage]
+    - [swift-proxy, glance]
+  series: trusty
+  services:
+    mysql:
+      charm: local:trusty/mysql
+      branch: lp:~ionutbalutoiu/charms/trusty/mysql/trunk
+    glance:
+      charm: local:trusty/glance
+      branch: lp:~ionutbalutoiu/charms/trusty/glance/next
+      options:
+        worker-multiplier: 1
+      to:
+        - lxc:mysql
+    keystone:
+      charm: local:trusty/keystone
+      branch: lp:~openstack-charmers/charms/trusty/keystone/next
+      options:
+        admin-password: "Passw0rd"
+        admin-user: "cloudbase"
+        keystone-service-admin-role: "admin"
+        keystone-admin-role: "admin"
+        admin-role: "admin"
+      to:
+        - mysql=0
+    neutron-api:
+      charm: local:trusty/neutron-api
+      branch: lp:charms/trusty/neutron-api
+      options:
+        neutron-security-groups: True
+        worker-multiplier: 1
+        overlay-network-type: "vxlan"
+        flat-network-providers: "physnet2"
+        vlan-ranges: "physnet1:1000:2000"
+      to:
+        - lxc:mysql
+    neutron-gateway:
+      charm: local:trusty/neutron-gateway
+      branch: lp:~openstack-charmers/charms/trusty/neutron-gateway/next
+      options:
+        plugin: "ovs"
+        bridge-mappings: "physnet1:br-data physnet2:br-ironic"
+        data-port: "br-ironic:eth1"
+        flat-network-providers: "physnet2"
+        vlan-ranges: "physnet1:1000:2000"
+        dnsmasq-flags: "dhcp-userclass=set:ipxe,iPXE, dhcp-match=set:ipxe,175"
+      to:
+        - mysql=0
+    nova-cloud-controller:
+      charm: local:trusty/nova-cloud-controller
+      branch: lp:charms/trusty/nova-cloud-controller
+      options:
+        worker-multiplier: 1
+        network-manager: "Neutron"
+        config-flags: "scheduler_host_manager=nova.scheduler.ironic_host_manager.IronicHostManager,compute_manager=ironic.nova.compute.manager.ClusteredComputeManager,default_floating_pool=public"
+        scheduler-default-filters: "RetryFilter,AvailabilityZoneFilter,CoreFilter,RamFilter,ComputeFilter"
+      to:
+        - lxc:mysql
+    openstack-dashboard:
+      charm: local:trusty/openstack-dashboard
+      branch: lp:charms/trusty/openstack-dashboard
+      options:
+        ubuntu-theme: "no"
+      to:
+        - lxc:mysql
+    rabbitmq-server:
+      charm: local:trusty/rabbitmq-server
+      branch: lp:charms/trusty/rabbitmq-server
+      to:
+        - mysql=0
+    ironic:
+      charm: local:trusty/ironic
+      branch: lp:~cloudbaseit/charms/trusty/ironic/trunk
+      options:
+        debug: True
+        verbose: True
+        pxe-bootfile-name: "ipxe.efi"
+        pxe-config-template: '/etc/ironic/ipxe_config.template'
+        http-port: 9090
+        enabled-drivers: "pxe_ipmitool,agent_ipmitool,fake_agent,agent_hyperv"
+        nodes-cleaning: "False"
+        ironic-port: "br-ironic"
+        ironic-subnet: "10.145.13.0/24"
+        swift-temp-url-duration: 3600
+      to:
+        - mysql=0
+    nova-compute-ironic:
+      charm: local:trusty/nova-compute-ironic
+      branch: lp:~cloudbaseit/charms/trusty/nova-compute-ironic/trunk
+      to:
+        - mysql=0
+    swift-proxy:
+      charm: local:trusty/swift-proxy
+      branch: lp:~ionutbalutoiu/charms/trusty/swift-proxy/next
+      options:
+        replicas: 1
+        zone-assignment: "auto"
+        auth-type: "keystone"
+        swift-hash: "a1654c1a614592f037b9c7d441cbb6de"
+        operator-roles: "Member,admin"
+      to:
+        - lxc:mysql
+    swift-storage:
+      charm: local:trusty/swift-storage
+      branch: lp:charms/trusty/swift-storage
+      options:
+        block-device: "/dev/sdb"
+      to:
+        - mysql=0

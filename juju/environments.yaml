@@ -1,0 +1,26 @@
+default: manual
+
+environments:
+    openstack:
+        type: openstack
+        use-floating-ip: true
+        disable-network-management: true
+        use-default-secgroup: true
+        network: ironic
+        agent-metadata-url: 'http://10.145.13.31/tools'
+        image-metadata-url: 'http://10.145.13.31/images'
+        auth-url: 'http://10.7.133.31:5000/v2.0'
+        tenant-name: admin
+        region: RegionOne
+        auth-mode: userpass
+        username: cloudbase
+        password: Passw0rd
+        enable-os-refresh-update: true
+        enable-os-upgrade: true
+
+    manual:
+        type: manual
+        bootstrap-host: 10.7.133.31
+        bootstrap-user: cloudbase
+        enable-os-refresh-update: true
+        enable-os-upgrade: true

@@ -1,0 +1,5 @@
+export OS_AUTH_URL=http://192.168.101.59:5000/v2.0
+export OS_TENANT_NAME="admin"
+export OS_USERNAME="admin"
+export OS_PASSWORD="Passw0rd"
+export PS1='[\u@\h \W(keystone_admin)]\$ '
