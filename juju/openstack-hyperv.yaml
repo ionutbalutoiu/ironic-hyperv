@@ -27,9 +27,6 @@ bundle:
     - [nova-cloud-controller, rabbitmq-server]
     # nova-compute
     - [nova-compute, rabbitmq-server]
-    - [nova-cloud-controller, neutron-openvswitch]
-    # neutron-openvswitch
-    - [neutron-openvswitch, rabbitmq-server]
     # kvm-openvswitch
     - [kvm-openvswitch, nova-compute]
     - [kvm-openvswitch, rabbitmq-server]

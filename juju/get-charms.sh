@@ -16,6 +16,7 @@ bzr branch lp:charms/trusty/rabbitmq-server $JUJU_REPOSITORY/trusty/rabbitmq-ser
 bzr branch lp:~cloudbaseit/charms/trusty/ironic/trunk $JUJU_REPOSITORY/trusty/ironic
 bzr branch lp:~cloudbaseit/charms/trusty/nova-compute-ironic/trunk $JUJU_REPOSITORY/trusty/nova-compute-ironic
 bzr branch lp:charms/trusty/swift-storage $JUJU_REPOSITORY/trusty/swift-storage
+bzr branch lp:charms/trusty/neutron-openvswitch $JUJU_REPOSITORY/trusty/neutron-openvswitch
 
 # Dev branches in order to have some changes until they merge into stable branches
 bzr branch lp:~openstack-charmers/charms/trusty/keystone/next $JUJU_REPOSITORY/trusty/keystone
