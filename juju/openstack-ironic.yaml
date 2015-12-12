@@ -115,6 +115,7 @@ bundle:
         verbose: True
         pxe-bootfile-name: "ipxe.efi"
         pxe-config-template: '/etc/ironic/ipxe_config.template'
+        enable-ipxe: True
         http-port: 9090
         enabled-drivers: "pxe_ipmitool,agent_ipmitool,fake_agent,agent_hyperv"
         nodes-cleaning: "False"

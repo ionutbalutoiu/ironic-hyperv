@@ -1,6 +1,6 @@
 bundle:
   overrides:
-    openstack-origin: "cloud:trusty-liberty"
+    openstack-origin: "cloud:trusty-kilo"
   default: true
   relations:
     # keystone
@@ -12,7 +12,6 @@ bundle:
     # glance
     - [glance, mysql]
     - [glance, nova-cloud-controller]
-    - [glance, nova-compute]
     # neutron-api
     - [neutron-api, mysql]
     - [neutron-api, rabbitmq-server]
@@ -25,13 +24,10 @@ bundle:
     # nova-cloud-controller
     - [nova-cloud-controller, mysql]
     - [nova-cloud-controller, rabbitmq-server]
-    # nova-compute
-    - [nova-compute, rabbitmq-server]
-    - [nova-compute, nova-cloud-controller]
-    # kvm-openvswitch
-    - [kvm-openvswitch, nova-compute]
-    - [kvm-openvswitch, rabbitmq-server]
-    - [kvm-openvswitch, neutron-api]
+    # nova-hyperv
+    - ['nova-hyperv', 'nova-cloud-controller']
+    - ['nova-hyperv', 'rabbitmq-server:amqp']
+    - ['nova-hyperv', glance]
   series: trusty
   services:
     mysql:
@@ -91,19 +87,6 @@ bundle:
         network-manager: "Neutron"
       to:
         - lxc:mysql
-    nova-compute:
-      charm: local:trusty/nova-compute
-      branch: lp:charms/nova-compute
-      constraints: "mem=2G cpu-cores=2 root-disk=50G"
-      options:
-        config-flags: "vncserver_listen=0.0.0.0,vnc_enabled=True"
-    kvm-openvswitch:
-      charm: local:trusty/neutron-openvswitch
-      branch: lp:charms/neutron-openvswitch
-      options:
-        bridge-mappings: "physnet1:br-data"
-        data-port: "br-data:eth1"
-        vlan-ranges: "physnet1:1000:2000"
     openstack-dashboard:
       charm: local:trusty/openstack-dashboard
       branch: lp:charms/trusty/openstack-dashboard
@@ -111,3 +94,11 @@ bundle:
         ubuntu-theme: "no"
       to:
         - lxc:mysql
+    nova-hyperv:
+      charm: local:win2012hvr2/nova-hyperv
+      branch: lp:charms/nova-hyperv
+      constraints: "mem=2G cpu-cores=2 root-disk=50G"
+      options:
+        data-port: "bond0"
+        bond-ports: "00:15:5d:85:50:12"
+        installer-url: "https://cloudbase.it/downloads/HyperVNovaCompute_Kilo_2015_1.msi"
