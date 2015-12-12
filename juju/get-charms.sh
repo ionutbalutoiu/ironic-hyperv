@@ -7,6 +7,7 @@ if [[ -z $JUJU_REPOSITORY ]]; then
 fi
 
 mkdir -p $JUJU_REPOSITORY/trusty
+mkdir -p $JUJU_REPOSITORY/win2012hvr2
 
 # Stable branches for the upstream charms
 bzr branch lp:charms/trusty/neutron-api $JUJU_REPOSITORY/trusty/neutron-api
@@ -17,6 +18,7 @@ bzr branch lp:~cloudbaseit/charms/trusty/ironic/trunk $JUJU_REPOSITORY/trusty/ir
 bzr branch lp:~cloudbaseit/charms/trusty/nova-compute-ironic/trunk $JUJU_REPOSITORY/trusty/nova-compute-ironic
 bzr branch lp:charms/trusty/swift-storage $JUJU_REPOSITORY/trusty/swift-storage
 bzr branch lp:charms/trusty/neutron-openvswitch $JUJU_REPOSITORY/trusty/neutron-openvswitch
+bzr branch lp:~cloudbaseit/charms/win2012hvr2/nova-hyperv/trunk $JUJU_REPOSITORY/win2012hvr2/nova-hyperv
 
 # Dev branches in order to have some changes until they merge into stable branches
 bzr branch lp:~openstack-charmers/charms/trusty/keystone/next $JUJU_REPOSITORY/trusty/keystone
