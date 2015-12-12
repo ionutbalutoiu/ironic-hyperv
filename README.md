@@ -10,16 +10,20 @@
 
      *NOTE(1)*: Before running `deploy.sh`, you must configure the manual provider to point to the current machine and use it as a state machine for Juju.
 
-            juju init
-            vim ~/.juju/environments.yaml # A sample of this file with the necessary configuration for manual or openstack providers can be found on this repository.
+        ```
+        juju init
+        vim ~/.juju/environments.yaml # A sample of this file with the necessary configuration for manual or openstack providers can be found on this repository.
+        ```
 
      *NOTE(2)*: Sometimes a race condition appears, when swift keystone user is not initialized even though the identity context is complete (to be fixed and and send PR to the upstream charm). As a temporary fix, just retry the hook for the glance charm and restart the services:
 
-            juju resolved -r glance/<unit_number>
-            juju ssh glance/<unit_number> 'sudo service glance-api restart'
-            juju ssh glance/<unit_number> 'sudo service glance-registry restart'
+        ```
+        juju resolved -r glance/<unit_number>
+        juju ssh glance/<unit_number> 'sudo service glance-api restart'
+        juju ssh glance/<unit_number> 'sudo service glance-registry restart'
+        ```
 
-3. After the deployment is done, you must configure the br-ex bridge to provide external access for the baremetal nodes and also provide connectivity between the nodes and the LXC containers. Considering our scenario where the OpenStack AIO is deployed on a node with 2 ports, you must add eth0 (primary nic) into br-ex, leave eth0 without IP and configure br-ex with eth0's IP. (do the necessary changes to /etc/network/interfaces to make them persistent over reboots)
+3. After the deployment is done, you must configure the br-ex bridge to provide external access for the baremetal nodes. Considering our scenario where the OpenStack AIO is deployed on a node with 2 ports, you must add eth0 (primary nic) into br-ex, leave eth0 without IP and configure br-ex with eth0's IP. (do the necessary changes to /etc/network/interfaces to make them persistent over reboots)
 
 4. Create a simple network topology (Ironic flat network + public network for floating IPs)
 
@@ -40,20 +44,20 @@
 
     Canonical provides qcow2 cloud image with ubuntu uefi. The following commands download the qcow2 image, converts it to raw, and uploads it to glance (make sure you exported the keystone credentials in order to use glance CLI)
 
-            wget http://cloud-images.ubuntu.com/trusty/20151201/trusty-server-cloudimg-amd64-uefi1.img -O /tmp/trusty-server-cloudimg-amd64-uefi1.img
-            qemu-img convert -f qcow2 -O raw /tmp/trusty-server-cloudimg-amd64-uefi1.img /tmp/trusty-server-cloudimg-amd64-uefi1-raw.img
-            glance image-create --name ubuntu-trusty-uefi --disk-format raw --container-format bare --progress --file /tmp/trusty-server-cloudimg-amd64-uefi1-raw.img
-            rm /tmp/trusty-server-cloudimg-amd64-uefi1.img
-            rm /tmp/trusty-server-cloudimg-amd64-uefi1-raw.img
+        wget http://cloud-images.ubuntu.com/trusty/20151201/trusty-server-cloudimg-amd64-uefi1.img -O /tmp/trusty-server-cloudimg-amd64-uefi1.img
+        qemu-img convert -f qcow2 -O raw /tmp/trusty-server-cloudimg-amd64-uefi1.img /tmp/trusty-server-cloudimg-amd64-uefi1-raw.img
+        glance image-create --name ubuntu-trusty-uefi --disk-format raw --container-format bare --progress --file /tmp/trusty-server-cloudimg-amd64-uefi1-raw.img
+        rm /tmp/trusty-server-cloudimg-amd64-uefi1.img
+        rm /tmp/trusty-server-cloudimg-amd64-uefi1-raw.img
 
     For IPA images you follow the instructions from here: https://github.com/openstack/ironic-python-agent/tree/master/imagebuild/coreos and create your own images. Or for convenience you can get already generated images from this link:
 
-            wget https://googledrive.com/host/0B2CEI88ASvahfmFwWFpfaGJBM3BxdkpCZGo1MGhBWURib1lJUU9Vd1I4dTJPc3VMMVdJdkE/ipa-images.tar.gz
+        wget https://googledrive.com/host/0B2CEI88ASvahfmFwWFpfaGJBM3BxdkpCZGo1MGhBWURib1lJUU9Vd1I4dTJPc3VMMVdJdkE/ipa-images.tar.gz
 
     Untar the archive and upload the images to glance using the following commands:
 
-            glance image-create --name coreos-kernel --visibility public --disk-format aki --container-format aki --file ./coreos_production_pxe.vmlinuz
-            glance image-create --name coreos-initramfs --visibility public --disk-format ari --container-format ari --file ./coreos_production_pxe_image-oem.cpio.gz
+        glance image-create --name coreos-kernel --visibility public --disk-format aki --container-format aki --file ./coreos_production_pxe.vmlinuz
+        glance image-create --name coreos-initramfs --visibility public --disk-format ari --container-format ari --file ./coreos_production_pxe_image-oem.cpio.gz
 
 6. We'll use iPXE for loading the Ironic Python Image on the bare metal node, in order to bootstrap the node with the requested OS. Ironic has been configured (in the openstack-ironic.yaml bundle) to look for the iPXE template at the location `/etc/ironic/ipxe_config.template`. Following command downloads the template from the current repository:
 
@@ -64,19 +68,17 @@
         sudo wget http://boot.ipxe.org/ipxe.efi -O /tftpboot/ipxe.efi
         sudo chown ironic:ironic /tftpboot/ipxe.efi
 
-8. When are using grub2 as the UEFI bootloader, you need to take care of this bug: http://wiki.cloudbase.it/hyperv-uefi-grub
-
-    **BIG NOTE**: This NOT preferable as it takes TOO MUCH time to load the IPA image to the nodes.
+    *NOTE*: If grub2 is used as the UEFI bootloader instead of iPXE, you need to take care of this bug: http://wiki.cloudbase.it/hyperv-uefi-grub. This **NOT** preferable as it takes TOO MUCH time to load the IPA image to the nodes.
 
     Script which applies the fix (you may need to re-run it if the ironic Juju agent restarts, as it will overwrite the changes):
 
-            wget http://wiki.cloudbase.it/_media/grubnetx64.efi.gz -O /tmp/grubnetx64.efi.gz
-            gunzip /tmp/grubnetx64.efi.gz -c > /tmp/grubnetx64.efi
-            rm /tmp/grubnetx64.efi.gz
-            sudo mv /tmp/grubnetx64.efi /tftpboot/grubx64.efi
-            sudo chown ironic:ironic /tftpboot/grubx64.efi
+        wget http://wiki.cloudbase.it/_media/grubnetx64.efi.gz -O /tmp/grubnetx64.efi.gz
+        gunzip /tmp/grubnetx64.efi.gz -c > /tmp/grubnetx64.efi
+        rm /tmp/grubnetx64.efi.gz
+        sudo mv /tmp/grubnetx64.efi /tftpboot/grubx64.efi
+        sudo chown ironic:ironic /tftpboot/grubx64.efi
 
-9. For Hyper-V Gen2 nodes, there's a simple implementation of an agent driver using WinRM to power the nodes and change the boot order. As a prerequisite, you need to enable WinRM on the Hyper-V host. Execute the following on the Ironic machine and install the driver (this will just copy the hyperv.py driver module to its location, do the changes to agent.py file and run 'python setup.py develop' to add a new entry to 'ironic.drivers' entry point):
+8. For Hyper-V Gen2 nodes, there's a simple implementation of an agent driver using WinRM to power the nodes and change the boot order. As a prerequisite, you need to enable WinRM on the Hyper-V host. Execute the following on the Ironic machine and install the driver:
 
         sudo apt-get install python-pip -y
         sudo pip install pywinrm
@@ -84,7 +86,7 @@
         sudo cp /tmp/hyper-v-driver/ironic/drivers/modules/hyperv.py /usr/lib/python2.7/dist-packages/ironic/drivers/modules/
         sudo cp /tmp/hyper-v-driver/ironic/drivers/agent.py /usr/lib/python2.7/dist-packages/ironic/drivers/
         pushd /tmp/hyper-v-driver
-        sudo python setup.py develop
+        sudo python setup.py install
         popd
         sudo rm -rf /tmp/hyper-v-driver
         sudo service ironic-api restart
@@ -92,7 +94,7 @@
 
     *NOTE*: You may need to check `/var/log/ironic/ironic-conductor.log` and `/var/log/ironic/ironic-api.log` for any errors.
 
-10. Execute the command `ironic driver-list` and if you see `agent_hyperv` driver listed there, if means that the the driver was successfully installed and ready to be used.
+9. Execute the command `ironic driver-list` and if you see `agent_hyperv` driver listed there, if means that the the driver was successfully installed and ready to be used.
 
 ### II. Use the Juju openstack provider to deploy OpenStack on baremetal using Ironic.
 
@@ -148,69 +150,77 @@ We will deploy a simple multi-node OpenStack consisting of two nodes (controller
 
     Replace the arguments with the ones matching your machines (node name, MAC address, RAM, VCPUs, etc):
 
-            ./create-hyperv-node.sh \
-                state-machine \
-                coreos-kernel \
-                coreos-initramfs \
-                1 1024 30 x86_64 \
-                "00:15:5d:85:50:0d" \
-                "10.7.133.80" "node-4-state-machine" "ionut" "Passw0rd"
+        ./create-hyperv-node.sh \
+            state-machine \
+            coreos-kernel \
+            coreos-initramfs \
+            1 1024 30 x86_64 \
+            "00:15:5d:85:50:0d" \
+            "10.7.133.80" "node-4-state-machine" "ionut" "Passw0rd"
 
-            ./create-hyperv-node.sh \
-                controller \
-                coreos-kernel \
-                coreos-initramfs \
-                2 3072 80 x86_64 \
-                "00:15:5d:85:50:0a" \
-                "10.7.133.80" "node-1-controller" "ionut" "Passw0rd"
+        ./create-hyperv-node.sh \
+            controller \
+            coreos-kernel \
+            coreos-initramfs \
+            2 6144 80 x86_64 \
+            "00:15:5d:85:50:0a" \
+            "10.7.133.80" "node-1-controller" "ionut" "Passw0rd"
 
-            ./create-hyperv-node.sh \
-                compute-kvm \
-                coreos-kernel \
-                coreos-initramfs \
-                2 2048 50 x86_64 \
-                "00:15:5d:85:50:0b" \
-                "10.7.133.80" "node-2-compute-kvm" "ionut" "Passw0rd"
+        ./create-hyperv-node.sh \
+            compute-hyperv \
+            coreos-kernel \
+            coreos-initramfs \
+            2 2048 50 x86_64 \
+            "00:15:5d:85:50:0c" \
+            "10.7.133.80" "node-3-compute-hyperv" "ionut" "Passw0rd"
 
 4. Edit `~/.juju/environments.yaml` and complete the details for the openstack provider. (sample of the file can be found on this repository)
 
 5. Generate juju tools. For convenience, you can use the following and download already compiled tools for `trusty`, `win2012hvr2` and others:
 
-            wget https://googledrive.com/host/0B2CEI88ASvahfmFwWFpfaGJBM3BxdkpCZGo1MGhBWURib1lJUU9Vd1I4dTJPc3VMMVdJdkE/tools.tar.gz -O /tmp/tools.tar.gz
-            mkdir -p ~/juju-metadata/
-            tar xzvf /tmp/tools.tar.gz -C ~/juju-metadata/
-            rm /tmp/tools.tar.gz
+    ```
+    wget https://googledrive.com/host/0B2CEI88ASvahfmFwWFpfaGJBM3BxdkpCZGo1MGhBWURib1lJUU9Vd1I4dTJPc3VMMVdJdkE/tools.tar.gz -O /tmp/tools.tar.gz
+    mkdir -p ~/juju-metadata/
+    tar xzvf /tmp/tools.tar.gz -C ~/juju-metadata/
+    rm /tmp/tools.tar.gz
+    ```
 
-6. Generate the juju metadata files for glance images. We'll use only `trusty` and `win2012hvr2` images:
+6. Generate the juju metadata files for glance images. We'll use only `trusty` and `win2012hvr2` images. Change the `AUTH_URL` to point to your keystone host and execute the following:
 
-        # Get the uuid for the ubuntu-trusty-uefi and win2012hvr2-uefi uploaded earlier
-        UBUNTU_UUID=`glance image-list | grep ubuntu-trusty-uefi | awk '{print $2}'`
-        WIN2012HVR2_UUID=`glance image-list | grep win2012hvr2-uefi | awk '{print $2}'`
+    ```
+    # Get the uuid for the ubuntu-trusty-uefi and win2012hvr2-uefi uploaded earlier
+    UBUNTU_UUID=`glance image-list | grep ubuntu-trusty-uefi | awk '{print $2}'`
+    WIN2012HVR2_UUID=`glance image-list | grep win2012hvr2-uefi | awk '{print $2}'`
 
-        # Find the public-address of the keystone unit and use that for the auth_url
-        AUTH_URL="http://<keystone_host>:5000/v2.0"
-        mkdir -p ~/juju-metadata/
+    # Find the public-address of the keystone unit and use that for the auth_url
+    AUTH_URL="http://<keystone_host>:5000/v2.0"
+    mkdir -p ~/juju-metadata/
 
-        juju metadata generate-image -a amd64 -i $UBUNTU_UUID -r RegionOne -s trusty -d ~/juju-metadata/ -u $AUTH_URL -e openstack
-        juju metadata generate-image -a amd64 -i $WIN2012HVR2_UUID -r RegionOne -s win2012hvr2 -d ~/juju-metadata/ -u $AUTH_URL -e openstack
+    juju metadata generate-image -a amd64 -i $UBUNTU_UUID -r RegionOne -s trusty -d ~/juju-metadata/ -u $AUTH_URL -e openstack
+    juju metadata generate-image -a amd64 -i $WIN2012HVR2_UUID -r RegionOne -s win2012hvr2 -d ~/juju-metadata/ -u $AUTH_URL -e openstack
+    ```
 
 7. Copy tools + images to the local web server and set 'agent-metadata-url' & 'image-metadata-url' in environments.yaml accordingly.
 
-        sudo cp -rf ~/juju-metadata/tools /var/www/html
-        sudo cp -rf ~/juju-metadata/images /var/www/html
-        sudo chmod -R 755 /var/www/html/tools
-        sudo chmod -R 755 /var/www/html/images
+    ```
+    sudo cp -rf ~/juju-metadata/tools /var/www/html
+    sudo cp -rf ~/juju-metadata/images /var/www/html
+    sudo chmod -R 755 /var/www/html/tools
+    sudo chmod -R 755 /var/www/html/images
+    ```
 
 8. Bootstrap the state-machine:
 
-        juju bootstrap --debug --constraints "mem=1G cpu-cores=1 root-disk=30G"
+    ```
+    juju bootstrap --debug --constraints "mem=1G cpu-cores=1 root-disk=30G"
+    ```
 
-    *NOTE(1)*: If you're getting the error: `Memory size is too small for requested image, if it is less..." in `ironic-conductor.log`, this is due to a bug in IPA that required enough RAM (the amount of glance image in size) to deploy the image. This was fixed in a recent commit in IPA master branch, but Ironic code validation must be updated as well.
+    *NOTE(1)*: If you're getting the error: `Memory size is too small for requested image, if it is less...` in `ironic-conductor.log`, this is due to a bug in IPA that required enough RAM (the amount of glance image in size) to deploy the image. This was fixed in a recent commit in IPA master branch, but Ironic code validation must be updated as well.
 
     Temporary fix:
-
-        - comment out line 167 where exception is raised in the /usr/lib/python2.7/dist-packages/ironic/drivers/modules/agent.py file;
-        - remove the .pyc file and restart the ironic-api & ironic-conductor services.
+    - comment out `line 167` where exception is raised in the `/usr/lib/python2.7/dist-packages/ironic/drivers/modules/agent.py` file;
+    - `sudo rm /usr/lib/python2.7/dist-packages/ironic/drivers/modules/agent.pyc`
+    - `sudo service ironic-api restart && sudo service ironic-conductor restart`
 
     *NOTE(2)*: `nova-scheduler` should choose the state-machine Hyper-V node as it matches the flavor details.
 
