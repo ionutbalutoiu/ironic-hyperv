@@ -91,8 +91,7 @@ bundle:
       options:
         worker-multiplier: 1
         network-manager: "Neutron"
-        config-flags: "scheduler_host_manager=nova.scheduler.ironic_host_manager.IronicHostManager,compute_manager=ironic.nova.compute.manager.ClusteredComputeManager,default_floating_pool=public"
-        scheduler-default-filters: "RetryFilter,AvailabilityZoneFilter,CoreFilter,RamFilter,ComputeFilter"
+        config-flags: "scheduler_host_manager=nova.scheduler.ironic_host_manager.IronicHostManager,compute_manager=ironic.nova.compute.manager.ClusteredComputeManager,default_floating_pool=public,scheduler_use_baremetal_filters=True,scheduler_tracks_instance_changes=False"
       to:
         - lxc:mysql
     openstack-dashboard:

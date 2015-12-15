@@ -4,7 +4,7 @@
 
 2. Execute the following scripts (found in this repository) on the Hyper-V node. This will install the OpenStack.
 
-    - `juju/prerequisites.sh` -> it gets all the dependencies and it installs Juju stable version
+    - `juju/prerequisites.sh` -> it gets all the dependencies and it installs Juju stable version.
     - `juju/get-charms.sh` -> it gets the required Juju charms (JUJU_REPOSITORY env variable must be set, this points to a directory where all the charms will be saved)
     - `juju/deploy.sh` -> it installs Openstack AIO (includes nova-compute configured with Ironic driver and LXC containers for some services) using `openstack-ironic.yaml` Juju bundle. Script does some steps that must be done before running `juju-deployer`.
 
@@ -40,7 +40,7 @@
 
     *NOTE*: The gateway for the public network must be the IP of the OpenStack AIO box, as the baremetal nodes need to access the 10.0.3.0/24 LXC containers' network.
 
-5. Prepare the glance images (IPA kernel + ramdisk, win2012hvr2 uefi and ubuntu 14.04 uefi). It is recommended to use raw disk-format in order to save time, as Ironic will convert them to raw anyway before deploying the nodes, if they have other formats.
+5. Prepare the glance images (IPA kernel + ramdisk, win10 uefi and ubuntu 14.04 uefi). It is recommended to use raw disk-format in order to save time, as Ironic will convert them to raw anyway before deploying the nodes, if they have other formats.
 
     Canonical provides qcow2 cloud image with ubuntu uefi. The following commands download the qcow2 image, converts it to raw, and uploads it to glance (make sure you exported the keystone credentials in order to use glance CLI)
 
@@ -176,7 +176,7 @@ We will deploy a simple multi-node OpenStack consisting of two nodes (controller
 
 4. Edit `~/.juju/environments.yaml` and complete the details for the openstack provider. (sample of the file can be found on this repository)
 
-5. Generate juju tools. For convenience, you can use the following and download already compiled tools for `trusty`, `win2012hvr2` and others:
+5. Generate juju tools. For convenience, you can use the following and download already compiled tools for `trusty`, `win10` and others:
 
     ```
     wget https://googledrive.com/host/0B2CEI88ASvahfmFwWFpfaGJBM3BxdkpCZGo1MGhBWURib1lJUU9Vd1I4dTJPc3VMMVdJdkE/tools.tar.gz -O /tmp/tools.tar.gz
@@ -185,19 +185,19 @@ We will deploy a simple multi-node OpenStack consisting of two nodes (controller
     rm /tmp/tools.tar.gz
     ```
 
-6. Generate the juju metadata files for glance images. We'll use only `trusty` and `win2012hvr2` images. Change the `AUTH_URL` to point to your keystone host and execute the following:
+6. Generate the juju metadata files for glance images. We'll use only `trusty` and `win10` images. Change the `AUTH_URL` to point to your keystone host and execute the following:
 
     ```
-    # Get the uuid for the ubuntu-trusty-uefi and win2012hvr2-uefi uploaded earlier
+    # Get the uuid for the ubuntu-trusty-uefi and win10-uefi uploaded earlier
     UBUNTU_UUID=`glance image-list | grep ubuntu-trusty-uefi | awk '{print $2}'`
-    WIN2012HVR2_UUID=`glance image-list | grep win2012hvr2-uefi | awk '{print $2}'`
+    WIN10=`glance image-list | grep win10-uefi | awk '{print $2}'`
 
     # Find the public-address of the keystone unit and use that for the auth_url
     AUTH_URL="http://<keystone_host>:5000/v2.0"
     mkdir -p ~/juju-metadata/
 
     juju metadata generate-image -a amd64 -i $UBUNTU_UUID -r RegionOne -s trusty -d ~/juju-metadata/ -u $AUTH_URL -e openstack
-    juju metadata generate-image -a amd64 -i $WIN2012HVR2_UUID -r RegionOne -s win2012hvr2 -d ~/juju-metadata/ -u $AUTH_URL -e openstack
+    juju metadata generate-image -a amd64 -i $WIN10 -r RegionOne -s win10 -d ~/juju-metadata/ -u $AUTH_URL -e openstack
     ```
 
 7. Copy tools + images to the local web server and set 'agent-metadata-url' & 'image-metadata-url' in environments.yaml accordingly.
@@ -215,10 +215,10 @@ We will deploy a simple multi-node OpenStack consisting of two nodes (controller
     juju bootstrap --debug --constraints "mem=1G cpu-cores=1 root-disk=30G"
     ```
 
-    *NOTE(1)*: If you're getting the error: `Memory size is too small for requested image, if it is less...` in `ironic-conductor.log`, this is due to a bug in IPA that required enough RAM (the amount of glance image in size) to deploy the image. This was fixed in a recent commit in IPA master branch, but Ironic code validation must be updated as well.
+    *NOTE(1)*: If you're getting the error: `Memory size is too small for requested image, if it is less...` in `ironic-conductor.log`, this is due to a bug in IPA that required enough RAM (the amount of glance image in size) to deploy the image. This was fixed in a recent commit in IPA and Ironic master branches. (https://bugs.launchpad.net/ironic-python-agent/+bug/1505685 & https://review.openstack.org/#/c/246356/)
 
     Temporary fix:
-    - comment out `line 167` where exception is raised in the `/usr/lib/python2.7/dist-packages/ironic/drivers/modules/agent.py` file;
+    - Comment out `line 167` where exception is raised in the `/usr/lib/python2.7/dist-packages/ironic/drivers/modules/agent.py` file;
     - `sudo rm /usr/lib/python2.7/dist-packages/ironic/drivers/modules/agent.pyc`
     - `sudo service ironic-api restart && sudo service ironic-conductor restart`
 
