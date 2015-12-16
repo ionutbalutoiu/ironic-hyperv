@@ -44,7 +44,7 @@
 
     Canonical provides qcow2 cloud image with ubuntu uefi. The following commands download the qcow2 image, converts it to raw, and uploads it to glance (make sure you exported the keystone credentials in order to use glance CLI)
 
-        wget http://cloud-images.ubuntu.com/trusty/20151201/trusty-server-cloudimg-amd64-uefi1.img -O /tmp/trusty-server-cloudimg-amd64-uefi1.img
+        wget http://cloud-images.ubuntu.com/trusty/current/trusty-server-cloudimg-amd64-uefi1.img -O /tmp/trusty-server-cloudimg-amd64-uefi1.img
         qemu-img convert -f qcow2 -O raw /tmp/trusty-server-cloudimg-amd64-uefi1.img /tmp/trusty-server-cloudimg-amd64-uefi1-raw.img
         glance image-create --name ubuntu-trusty-uefi --disk-format raw --container-format bare --progress --file /tmp/trusty-server-cloudimg-amd64-uefi1-raw.img
         rm /tmp/trusty-server-cloudimg-amd64-uefi1.img
@@ -83,8 +83,6 @@
         sudo apt-get install python-pip -y
         sudo pip install pywinrm
         git clone https://github.com/ionutbalutoiu/ironic -b hyper-v-driver /tmp/hyper-v-driver
-        sudo cp /tmp/hyper-v-driver/ironic/drivers/modules/hyperv.py /usr/lib/python2.7/dist-packages/ironic/drivers/modules/
-        sudo cp /tmp/hyper-v-driver/ironic/drivers/agent.py /usr/lib/python2.7/dist-packages/ironic/drivers/
         pushd /tmp/hyper-v-driver
         sudo python setup.py install
         popd
@@ -218,10 +216,49 @@ We will deploy a simple multi-node OpenStack consisting of two nodes (controller
     *NOTE(1)*: If you're getting the error: `Memory size is too small for requested image, if it is less...` in `ironic-conductor.log`, this is due to a bug in IPA that required enough RAM (the amount of glance image in size) to deploy the image. This was fixed in a recent commit in IPA and Ironic master branches. (https://bugs.launchpad.net/ironic-python-agent/+bug/1505685 & https://review.openstack.org/#/c/246356/)
 
     Temporary fix:
-    - Comment out `line 167` where exception is raised in the `/usr/lib/python2.7/dist-packages/ironic/drivers/modules/agent.py` file;
-    - `sudo rm /usr/lib/python2.7/dist-packages/ironic/drivers/modules/agent.pyc`
+    - Comment out `line 167` where exception is raised in the `/usr/local/lib/python2.7/dist-packages/ironic/drivers/modules/agent.py` file;
+    - `sudo rm /usr/local/lib/python2.7/dist-packages/ironic/drivers/modules/agent.pyc`
     - `sudo service ironic-api restart && sudo service ironic-conductor restart`
 
     *NOTE(2)*: `nova-scheduler` should choose the state-machine Hyper-V node as it matches the flavor details.
 
 9. `juju-deployer -S -c juju/openstack-hyperv.yaml` - it deploys controller + Hyper-V compute node.
+
+10. Once deployment finishes. You need to set a static route on the Win10 Hyper-V compute node in order to provide it connectivity to the LXC containers from the controller node. Execute the following in an elevated PowerShell from the Win10 machine.
+
+    ```
+    route -p add 10.0.3.0 mask 255.255.255.0 <CONTROLLER_PRIVATE_IP> metric 1
+    ```
+
+11. If everything went well, your OpenStack deployment on Hyper-V machines using Ironic is done.
+
+
+### III. Install and use `ironic-inspector` to inspect new Ironic machines.
+
+*NOTE*: This is a manual installation from git source, for the moment.
+
+1. Create a database and an user for the `ironic-inspector`
+
+    Login to `mysql` command line prompt and execute the following (replace `<PASSWORD>` with the desired password for the database user):
+
+    ```
+    CREATE DATABASE inspector CHARACTER SET utf8;
+    GRANT ALL PRIVILEGES ON inspector.* TO 'inspector'@'localhost' IDENTIFIED BY '<PASSWORD>';
+    GRANT ALL PRIVILEGES ON inspector.* TO 'inspector'@'%' IDENTIFIED BY '<PASSWORD>';
+    ```
+
+2. `install-ironic-inspector.sh` - script which installs Ironic inspector and generates the configuration file for it.
+
+    *NOTE*: Before running it, make sure you edit the global parameters from the beginning of the script to match your environment.
+
+3. Instruct Ironic to use Inspector.
+
+    *NOTE*: Ironic has been installed using Juju. This change be overridden by Juju every time the Juju agent restarts.
+
+    ```
+    sudo apt-get install crudini -y
+    sudo crudini --set /etc/ironic/ironic.conf inspector enabled True
+    sudo crudini --set /etc/ironic/ironic.conf inspector service_url "http://<IRONIC_INSPECTOR_HOST>:5050"
+    sudo service ironic-api restart
+    sudo service ironic-conductor restart
+    ```
