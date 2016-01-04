@@ -33,7 +33,7 @@ bundle:
     mysql:
       charm: local:trusty/mysql
       branch: lp:~ionutbalutoiu/charms/trusty/mysql/trunk
-      constraints: "mem=4G cpu-cores=2 root-disk=80G"
+      constraints: "mem=6G cpu-cores=2 root-disk=100G"
     rabbitmq-server:
       charm: local:trusty/rabbitmq-server
       branch: lp:charms/trusty/rabbitmq-server
@@ -97,7 +97,7 @@ bundle:
     nova-hyperv:
       charm: local:win10/nova-hyperv
       branch: lp:charms/nova-hyperv
-      constraints: "mem=2G cpu-cores=2 root-disk=50G"
+      constraints: "mem=3G cpu-cores=2 root-disk=50G"
       options:
         data-port: "00:15:5d:85:50:12"
         installer-url: "https://cloudbase.it/downloads/HyperVNovaCompute_Kilo_2015_1.msi"

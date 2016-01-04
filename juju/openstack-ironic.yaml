@@ -113,8 +113,10 @@ bundle:
         debug: True
         verbose: True
         enable-ipxe: True
-        pxe-bootfile-name: "ipxe.efi"
+        pxe-bootfile-name: "undionly.kpxe"
         pxe-config-template: '$pybasedir/drivers/modules/ipxe_config.template'
+        uefi-pxe-bootfile-name: "ipxe.efi"
+        uefi-pxe-config-template: '$pybasedir/drivers/modules/ipxe_config.template'
         http-port: 9090
         enabled-drivers: "pxe_ipmitool,agent_ipmitool,fake_agent,agent_hyperv"
         nodes-cleaning: "False"
