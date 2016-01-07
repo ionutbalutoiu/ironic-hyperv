@@ -93,7 +93,51 @@
 
 9. Execute the command `ironic driver-list` and if you see `agent_hyperv` driver listed there, if means that the the driver was successfully installed and ready to be used.
 
-### II. Use the Juju openstack provider to deploy OpenStack on baremetal using Ironic.
+### II. Install and use `ironic-inspector` to discover new Ironic machines.
+
+1. Create a database and an user for the `ironic-inspector`.
+
+    Login to `MySQL` command line prompt and execute the following (replace `<PASSWORD>` with the desired password for the database user). **NOTE**: If you deployed `MySQL` with Juju, you can execute the following command on the `MySQL` host and login with the root user:
+
+    ```
+    mysql -u root -p`sudo cat /var/lib/mysql/mysql.passwd`
+    ```
+
+    ```
+    CREATE DATABASE inspector CHARACTER SET utf8;
+    GRANT ALL PRIVILEGES ON inspector.* TO 'inspector'@'localhost' IDENTIFIED BY '<PASSWORD>';
+    GRANT ALL PRIVILEGES ON inspector.* TO 'inspector'@'%' IDENTIFIED BY '<PASSWORD>';
+    ```
+
+2. Install `ironic-inspector`.
+
+    The script `install-ironic-inspector.sh` will install `ironic-inspector` from git and generates the configuration file for it. 
+
+    **NOTE(1)**: Before running it, make sure you edit the global parameters from the beginning of the script to match your environment.
+
+    **NOTE(2)**: Keystone credentials for Ironic are needed for the `ironic-inspector`. You can find them in the `/etc/ironic/ironic.conf` at section `keystone_authtoken`.
+
+3. Instruct Ironic to use `ironic-inspector`.
+
+    **NOTE**: Ironic has been installed using Juju. This change be overridden by Juju every time the Juju agent restarts.
+
+    ```
+    sudo apt-get install crudini -y
+    sudo crudini --set /etc/ironic/ironic.conf inspector enabled True
+    sudo crudini --set /etc/ironic/ironic.conf inspector service_url "http://<IRONIC_INSPECTOR_HOST>:5050"
+    sudo service ironic-api restart
+    sudo service ironic-conductor restart
+    ```
+
+4. Start `ironic-inspector` service and check `/var/log/ironic-inspector/ironic-inspector.log` for any errors.
+
+5. Create the PXE boot environment to serve discovery kernel + ramdisk to new baremetal nodes.
+
+    In this scenario we deployed `ironic-inspector` on the same node with Ironic and the Juju charm configured Ironic's PXE boot environment. For `ironic-inspector` PXE environment, we'll use`iPXE`, and for discovery the same `IPA` coreos based images needed for deploy.
+
+    The script `create-pxe-ironic-inspector.sh` can be executed on the Ironic node and it will set up the environment. **NOTE**: This script uses the fact that Ironic machine has already configured a TFTP server and a web server for `iPXE`.
+
+### III. Use the Juju openstack provider to deploy OpenStack on baremetal using Ironic.
 
 We will deploy a simple multi-node OpenStack consisting of two nodes (controller/network node + compute Hyper-V node).
 
@@ -213,34 +257,3 @@ We will deploy a simple multi-node OpenStack consisting of two nodes (controller
     ```
 
 11. If everything went well, your OpenStack deployment on Hyper-V machines using Ironic is done.
-
-
-### III. Install and use `ironic-inspector` to inspect new Ironic machines.
-
-*NOTE*: This is a manual installation from git source, for the moment.
-
-1. Create a database and an user for the `ironic-inspector`
-
-    Login to `mysql` command line prompt and execute the following (replace `<PASSWORD>` with the desired password for the database user):
-
-    ```
-    CREATE DATABASE inspector CHARACTER SET utf8;
-    GRANT ALL PRIVILEGES ON inspector.* TO 'inspector'@'localhost' IDENTIFIED BY '<PASSWORD>';
-    GRANT ALL PRIVILEGES ON inspector.* TO 'inspector'@'%' IDENTIFIED BY '<PASSWORD>';
-    ```
-
-2. `install-ironic-inspector.sh` - script which installs Ironic inspector and generates the configuration file for it.
-
-    *NOTE*: Before running it, make sure you edit the global parameters from the beginning of the script to match your environment.
-
-3. Instruct Ironic to use Inspector.
-
-    *NOTE*: Ironic has been installed using Juju. This change be overridden by Juju every time the Juju agent restarts.
-
-    ```
-    sudo apt-get install crudini -y
-    sudo crudini --set /etc/ironic/ironic.conf inspector enabled True
-    sudo crudini --set /etc/ironic/ironic.conf inspector service_url "http://<IRONIC_INSPECTOR_HOST>:5050"
-    sudo service ironic-api restart
-    sudo service ironic-conductor restart
-    ```

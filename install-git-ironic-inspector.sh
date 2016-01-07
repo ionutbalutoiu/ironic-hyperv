@@ -2,28 +2,34 @@
 set -e
 
 ### GLOBAL PARAMETERS ###
+KEYSTONE_HOST=""
+IRONIC_HOST=""
+MYSQL_HOST=""
+INSPECTOR_MYSQL_DB_USER_PASSWORD=""
+IRONIC_KEYSTONE_ADMIN_USER=""
+IRONIC_KEYSTONE_ADMIN_PASSWORD=""
+IRONIC_KEYSTONE_ADMIN_TENANT_NAME=""
+# The following parameters won't probably need to be changed.
 GIT_BRANCH="stable/liberty"
 IRONIC_INSPECTOR_PYTHON_CLIENT_GIT_URL="https://github.com/openstack/python-ironic-inspector-client.git"
 IRONIC_INSPECTOR_GIT_URL="https://github.com/openstack/ironic-inspector.git"
 DNSMASQ_INTERFACE="br-ironic"
-MYSQL_HOST="10.7.133.31"
-MYSQL_DB_NAME="inspector"
-MYSQL_DB_USER="inspector"
-MYSQL_DB_USER_PASSWORD="Passw0rd"
-IRONIC_HOST="10.7.133.31"
-KEYSTONE_PUBLIC_ENDPOINT="http://10.7.133.31:5000"
-KEYSTONE_ADMIN_ENDPOINT="http://10.7.133.31:35357"
-IRONIC_KEYSTONE_ADMIN_USER="ironic"
-IRONIC_KEYSTONE_ADMIN_PASSWORD="Y4tVdnbSTpBB9sqzr3CMfJL8b6rXStKfVy77NGkTPWbcqy7yFfgTXcNX3J8ztFL8"
-IRONIC_KEYSTONE_ADMIN_TENANT_NAME="services"
+INSPECTOR_MYSQL_DB_NAME="inspector"
+INSPECTOR_MYSQL_DB_USER="inspector"
+KEYSTONE_PUBLIC_ENDPOINT="http://${KEYSTONE_HOST}:5000/v2.0"
+KEYSTONE_ADMIN_ENDPOINT="http://${KEYSTONE_HOST}:35357"
 ###
 
-# Enable Liberty repository
-add-apt-repository cloud-archive:liberty -y
-apt-get update
+if [[ -z $KEYSTONE_HOST ]] || [[ -z $IRONIC_HOST ]] || [[ -z $DNSMASQ_INTERFACE ]] || \
+   [[ -z $MYSQL_HOST ]] || [[ -z $INSPECTOR_MYSQL_DB_USER_PASSWORD ]] || \
+   [[ -z $IRONIC_KEYSTONE_ADMIN_USER ]] || [[ -z $IRONIC_KEYSTONE_ADMIN_PASSWORD ]] || \
+   [[ -z $IRONIC_KEYSTONE_ADMIN_TENANT_NAME ]]; then
+    echo "ERROR: Some global parameters are not set."
+    exit 1
+fi
 
 # Install prerequisites
-apt-get install git dnsmasq python-pip python-dev syslinux-common syslinux -y
+apt-get install git python-pip python-dev syslinux-common syslinux -y
 pip install pymysql
 
 # Install ironic-inspector python client
@@ -79,7 +85,7 @@ log_file = ironic-inspector.log
 log_dir = $IRONIC_INSPECTOR_LOG
 
 [database]
-connection = mysql+pymysql://$MYSQL_DB_USER:$MYSQL_DB_USER_PASSWORD@$MYSQL_HOST/$MYSQL_DB_NAME?charset=utf8
+connection = mysql+pymysql://$INSPECTOR_MYSQL_DB_USER:$INSPECTOR_MYSQL_DB_USER_PASSWORD@$MYSQL_HOST/$INSPECTOR_MYSQL_DB_NAME?charset=utf8
 
 [firewall]
 manage_firewall = true
@@ -91,7 +97,7 @@ firewall_chain = ironic-inspector
 auth_strategy = keystone
 ironic_url = http://$IRONIC_HOST:6385
 identity_uri = $KEYSTONE_ADMIN_ENDPOINT
-os_auth_url = $KEYSTONE_PUBLIC_ENDPOINT/v2.0
+os_auth_url = $KEYSTONE_PUBLIC_ENDPOINT
 os_username = $IRONIC_KEYSTONE_ADMIN_USER
 os_password = $IRONIC_KEYSTONE_ADMIN_PASSWORD
 os_tenant_name = $IRONIC_KEYSTONE_ADMIN_TENANT_NAME
@@ -122,6 +128,3 @@ respawn limit 2 10
 
 exec start-stop-daemon --start -c $IRONIC_USER --exec /usr/local/bin/ironic-inspector -- --config-file $IRONIC_INSPECTOR_ETC/inspector.conf --log-file $IRONIC_INSPECTOR_LOG/ironic-inspector.log
 EOF
-
-# restart ironic-inspector service
-service ironic-inspector restart
