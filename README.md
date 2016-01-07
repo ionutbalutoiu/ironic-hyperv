@@ -119,7 +119,7 @@
 
 3. Instruct Ironic to use `ironic-inspector`.
 
-    **NOTE**: Ironic has been installed using Juju. This change be overridden by Juju every time the Juju agent restarts.
+    **NOTE**: Ironic has been installed using Juju. This change be overridden by Juju every time the Juju agent restarts. Replace `<IRONIC_INSPECTOR_HOST>` and execute the following commands:
 
     ```
     sudo apt-get install crudini -y
@@ -137,11 +137,26 @@
 
     The script `create-pxe-ironic-inspector.sh` can be executed on the Ironic node and it will set up the environment. **NOTE**: This script uses the fact that Ironic machine has already configured a TFTP server and a web server for `iPXE`.
 
+6. Make sure you have the `IPA` ramdisk + kernel in the `/httpboot` (the root directory of the web server which serves `iPXE` files). You can download the images directly from glance and put them there:
+
+    ```
+    COREOS_KERNEL_GLANCE_IMAGE_NAME="coreos-kernel"
+    COREOS_INITRAMFS_GLANCE_IMAGE_NAME="coreos-initramfs"
+
+    KERNEL_ID=`glance image-list | egrep "\s+$COREOS_KERNEL_GLANCE_IMAGE_NAME\s+" | awk '{print $2}'`
+    RAMDISK_ID=`glance image-list | egrep "\s+$COREOS_INITRAMFS_GLANCE_IMAGE_NAME\s+" | awk '{print $2}'`
+
+    glance image-download $KERNEL_ID --file /tmp/ironic-agent.vmlinuz
+    glance image-download $RAMDISK_ID --file /tmp/ironic-agent.initramfs
+    sudo mv /tmp/ironic-agent.vmlinuz /tmp/ironic-agent.initramfs /httpboot/
+    sudo chown ironic:ironic /httpboot/ironic-agent.vmlinuz /httpboot/ironic-agent.initramfs
+    ```
+
 ### III. Use the Juju openstack provider to deploy OpenStack on baremetal using Ironic.
 
-We will deploy a simple multi-node OpenStack consisting of two nodes (controller/network node + compute Hyper-V node).
+We will deploy a simple multi-node OpenStack consisting of two nodes (controller/network node + compute node which are `Hyper-V` Gen2 VMs treated as baremetal nodes by Ironic).
 
-1. Create the following three Gen2 Hyper-V VMs:
+1. Create the following three `Hyper-V` Gen2 VMs:
 
     - `state-machine`:
         - 1 VPUs;
@@ -166,48 +181,52 @@ We will deploy a simple multi-node OpenStack consisting of two nodes (controller
             - First NIC connected to the `ironic-private` switch (Internal switch used for Ironic flat network and also for management/external traffic for the multi-node OpenStack VMs);
             - Second NIC connected to the `openstack-private` switch (Internal switch used for OpenStack private traffic).
 
-2. You need to create flavors for all baremetal nodes configurations.
+2. Use `ironic-inspector` to inspect the nodes. Firstly we need to add the nodes with the minimum properties required for inspection. Follow the steps for every `Hyper-V` node.
 
-    - state-machine:
+    - Create the `Hyper-V` Ironic node and associate the MAC address of its PXE port:
 
-            nova flavor-create state-machine auto 1024 30 1
-            nova flavor-key state-machine set cpu_arch=x86_64
-            nova flavor-key state-machine set capabilities:boot_mode="uefi"
-            nova flavor-key state-machine set capabilities:boot_option="local"
+        ```
+        NODE_UUID=`ironic node-create -d agent_hyperv -n <NODE_NAME> | egrep "\|\s*uuid\s*\|" | awk '{print $4}'`
+        ironic node-update $NODE_UUID add \
+            driver_info/power_address="<HYPERV_HOST>" \
+            driver_info/power_id="<VM_NAME>" \
+            driver_info/power_user="<WINRM_USER>" \
+            driver_info/power_pass="<WINRM_USER_PASSWORD>"
+        ironic port-create -n $NODE_UUID -a <MAC_ADDRESS>
+        ```
 
-    - controller:
+    - Set the provision state of the node to `manage` and after that to `inspect`:
 
-            nova flavor-create controller auto 6144 100 2
-            nova flavor-key controller set cpu_arch=x86_64
-            nova flavor-key controller set capabilities:boot_mode="uefi"
-            nova flavor-key controller set capabilities:boot_option="local"
+        ```
+        ironic node-set-provision-state <NODE_NAME> manage
+        ironic node-set-provision-state <NODE_NAME> inspect
+        ```
 
-    - compute-hyperv:
+    - After inspection finishes, you can check that the node properties are updated and move the node in `provide` state, which `available`:
 
-            nova flavor-create compute-hyperv auto 3072 50 2
-            nova flavor-key compute-hyperv set cpu_arch=x86_64
-            nova flavor-key compute-hyperv set capabilities:boot_mode="uefi"
-            nova flavor-key compute-hyperv set capabilities:boot_option="local"
+        ```
+        ironic node-show <NODE_NAME>
+        ironic node-set-provision-state <NODE_NAME> provide
+        ```
 
-    *NOTE*: You may need to delete the default flavors and keep only the ones for baremetal nodes. This is recommended because when you pass constraints (cpu, memory, disk, etc) to juju deploy/bootstrap commands, you make sure juju boots a new baremetal node with the desired custom flavor.
+    **NOTE**: This repository contains a script, `create-hyperv-node.sh`, for creation of UEFI Ironic nodes with Hyper-V driver. The script prints the usage if run without parameters.
 
-3. `./create-hyperv-node.sh` -> it creates an Ironic node with Hyper-V driver.
 
-    *NOTE*: The script prints the usage if run without parameters.
+4. `nova-scheduler` is configured with `scheduler_use_baremetal_filters` set to `True`, which means that the following default filters are applied before booting a node (`RetryFilter`, `AvailabilityZoneFilter`, `ComputeFilter`, `ComputeCapabilitiesFilter`, `ImagePropertiesFilter`, `ExactRamFilter`, `ExactDiskFilter`, `ExactCoreFilter`). So, we will need flavors to match exactly the Ironic node properties.
 
-    Usage example. Replace the arguments with the ones matching your machines (node name, MAC address, RAM, VCPUs, etc):
+    The Python script `create-bare-metal-flavors.py` from this repository iterates over all Ironic nodes that are inspected and creates a flavor with the name of the Ironic node for each one.
 
-        ./create-hyperv-node.sh \
-            state-machine \
-            coreos-kernel \
-            coreos-initramfs \
-            1 1024 30 x86_64 \
-            "00:15:5d:85:50:0d" \
-            "10.7.133.80" "state-machine" "ionut" "Passw0rd"
+    **NOTE**: `ironic-inspector` doesn't recognize `Hyper-V` Ironic nodes set in UEFI mode. So you'll need to manually update the Ironic node + its corresponding flavor with some extra properties:
 
-4. Edit `~/.juju/environments.yaml` and complete the details for the openstack provider. (sample of the file can be found on this repository)
+    ```
+    ironic node-update <NODE_NAME> add properties/capabilities='boot_mode:uefi,boot_option:local'
+    nova flavor-key <NODE_NAME> set capabilities:boot_mode="uefi"
+    nova flavor-key <NODE_NAME> set capabilities:boot_option="local"
+    ```
 
-5. Generate juju tools. For convenience, you can use the following and download already compiled tools for `trusty`, `win10` and others:
+5. Edit `~/.juju/environments.yaml` and complete the details for the Juju openstack provider. (sample of the file can be found on this repository)
+
+6. Generate juju tools. For convenience, you can use the following and download already compiled tools for `trusty`, `win10` and others:
 
     ```
     wget https://googledrive.com/host/0B2CEI88ASvahfmFwWFpfaGJBM3BxdkpCZGo1MGhBWURib1lJUU9Vd1I4dTJPc3VMMVdJdkE/tools.tar.gz -O /tmp/tools.tar.gz
@@ -216,7 +235,7 @@ We will deploy a simple multi-node OpenStack consisting of two nodes (controller
     rm /tmp/tools.tar.gz
     ```
 
-6. Generate the juju metadata files for glance images. We'll use only `trusty` and `win10` images. Change the `AUTH_URL` to point to your keystone host and execute the following:
+7. Generate the juju metadata files for glance images. We'll use only `trusty` and `win10` images. Change the `AUTH_URL` to point to your keystone host and execute the following:
 
     ```
     # Get the uuid for the ubuntu-trusty-uefi and win10-uefi uploaded earlier
@@ -231,7 +250,7 @@ We will deploy a simple multi-node OpenStack consisting of two nodes (controller
     juju metadata generate-image -a amd64 -i $WIN10 -r RegionOne -s win10 -d ~/juju-metadata/ -u $AUTH_URL -e openstack
     ```
 
-7. Copy tools + images to the local web server and set 'agent-metadata-url' & 'image-metadata-url' in environments.yaml accordingly.
+8. Copy tools + images to the local web server and set 'agent-metadata-url' & 'image-metadata-url' in environments.yaml accordingly.
 
     ```
     sudo cp -rf ~/juju-metadata/tools /var/www/html
@@ -240,20 +259,21 @@ We will deploy a simple multi-node OpenStack consisting of two nodes (controller
     sudo chmod -R 755 /var/www/html/images
     ```
 
-8. Bootstrap the state-machine:
+9. Bootstrap the state-machine:
 
     ```
+    juju switch openstack
     juju bootstrap --debug --constraints "mem=1G cpu-cores=1 root-disk=30G"
     ```
 
-    *NOTE*: `nova-scheduler` should choose the state-machine Hyper-V node as it matches the flavor details.
+    *NOTE*: `nova-scheduler` need to choose the `state-machine` Hyper-V node. So the `constraints` must match the `state-machine` flavor details.
 
-9. `juju-deployer -S -c juju/openstack-hyperv.yaml` - it deploys controller + Hyper-V compute node.
+10. `juju-deployer -S -c juju/openstack-hyperv.yaml` - it deploys controller + Hyper-V compute node.
 
-10. Once deployment finishes. You need to set a static route on the Win10 Hyper-V compute node in order to provide it connectivity to the LXC containers from the controller node. Execute the following in an elevated PowerShell from the Win10 machine.
+11. Once deployment finishes. You need to set a static route on the Win10 Hyper-V compute node in order to provide it connectivity to the LXC containers from the controller node. Execute the following in an elevated PowerShell from the Win10 machine.
 
     ```
     route -p add 10.0.3.0 mask 255.255.255.0 <CONTROLLER_PRIVATE_IP> metric 1
     ```
 
-11. If everything went well, your OpenStack deployment on Hyper-V machines using Ironic is done.
+12. If everything went well, your OpenStack deployment on `Hyper-V` machines using Ironic is done.
