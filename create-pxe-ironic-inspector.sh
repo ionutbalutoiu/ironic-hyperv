@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 set -e
 
+if [[ $EUID -ne 0 ]]; then
+    echo "ERROR: Script must be run as root user."
+    exit 1
+fi
+
 ### GLOBAL PARAMETERS ###
 INSPECTOR_HOST=""
 IRONIC_HOST=""
@@ -12,6 +17,7 @@ DHCPD_DNS=""
 # The following parameters won't probably need to be changed.
 HTTP_BOOT="/httpboot"
 IRONIC_IPXE_WEBSERVER_PORT="9090"
+DNSMASQ_INTERFACE="br-ironic"
 IRONIC_USER="ironic"
 ###
 
@@ -20,6 +26,8 @@ if [[ -z $INSPECTOR_HOST ]] || [[ -z $IRONIC_HOST ]] || [[ -z $DHCPD_IP_NETWORK 
     echo "ERROR: Some global parameters are not set."
     exit 1
 fi
+
+apt-get install isc-dhcp-server -y
 
 mkdir -p $HTTP_BOOT/pxelinux.cfg
 cat << EOF > $HTTP_BOOT/pxelinux.cfg/inspector_config
@@ -66,3 +74,9 @@ subnet $DHCPD_IP_NETWORK netmask $DHCPD_IP_NETMASK {
     }
 }
 EOF
+
+cat << EOF > /etc/default/isc-dhcp-server
+INTERFACES="$DNSMASQ_INTERFACE"
+EOF
+
+service isc-dhcp-server restart

@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 set -e
 
+if [[ $EUID -ne 0 ]]; then
+    echo "ERROR: Script must be run as root user."
+    exit 1
+fi
+
 ### GLOBAL PARAMETERS ###
 KEYSTONE_HOST=""
 IRONIC_HOST=""
