@@ -30,7 +30,14 @@ for node in ironic_client.node.list():
     node_properties = ironic_client.node.get(node.uuid).properties
     if ('memory_mb' in node_properties and 'cpus' in node_properties and
        'local_gb' in node_properties):
-        nova_client.flavors.create(name=node_name,
-                                   ram=node_properties['memory_mb'],
-                                   vcpus=node_properties['cpus'],
-                                   disk=node_properties['local_gb'])
+        flavor = nova_client.flavors.create(
+                                    name=node_name,
+                                    ram=node_properties['memory_mb'],
+                                    vcpus=node_properties['cpus'],
+                                    disk=node_properties['local_gb'])
+        if 'cpu_arch' in node_properties:
+            flavor.set_keys({'cpu_arch': node_properties['cpu_arch']})
+        if 'capabilities' in node_properties:
+            for capability in node_properties['capabilities'].split(','):
+                key, value = capability.split(':')
+                flavor.set_keys({'capabilities:%s' % key: value})

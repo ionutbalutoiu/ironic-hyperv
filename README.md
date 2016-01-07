@@ -209,20 +209,31 @@ We will deploy a simple multi-node OpenStack consisting of two nodes (controller
         ironic node-set-provision-state <NODE_NAME> provide
         ```
 
-    **NOTE**: This repository contains a script, `create-hyperv-node.sh`, for creation of UEFI Ironic nodes with Hyper-V driver. The script prints the usage if run without parameters.
+        **NOTE**: `ironic-inspector` doesn't recognize `Hyper-V` Ironic nodes set in UEFI mode. So you'll need to manually update the Ironic node:
+
+        ```
+        ironic node-update <NODE_NAME> add properties/capabilities='boot_mode:uefi,boot_option:local'
+        ```
+
+    - Make sure you associate the `IPA` deploy images to the Ironic node:
+
+        ```
+        COREOS_KERNEL_GLANCE_IMAGE_NAME="coreos-kernel"
+        COREOS_INITRAMFS_GLANCE_IMAGE_NAME="coreos-initramfs"
+        KERNEL_ID=`glance image-list | egrep "\s+$COREOS_KERNEL_GLANCE_IMAGE_NAME\s+" | awk '{print $2}'`
+        RAMDISK_ID=`glance image-list | egrep "\s+$COREOS_INITRAMFS_GLANCE_IMAGE_NAME\s+" | awk '{print $2}'`
+
+        ironic node-update <NODE_NAME> add \
+            driver_info/deploy_kernel="$KERNEL_ID" \
+            driver_info/deploy_ramdisk="$RAMDISK_ID"
+        ```
+
+    **NOTE**: This repository contains a script, `create-hyperv-node.sh`, for manual registration of UEFI Ironic nodes with Hyper-V driver. The script prints the usage if run without parameters.
 
 
-4. `nova-scheduler` is configured with `scheduler_use_baremetal_filters` set to `True`, which means that the following default filters are applied before booting a node (`RetryFilter`, `AvailabilityZoneFilter`, `ComputeFilter`, `ComputeCapabilitiesFilter`, `ImagePropertiesFilter`, `ExactRamFilter`, `ExactDiskFilter`, `ExactCoreFilter`). So, we will need flavors to match exactly the Ironic node properties.
+4. `nova-scheduler` is configured with `scheduler_use_baremetal_filters` set to `True`, which means that the following default filters are applied before booting a node: `RetryFilter`, `AvailabilityZoneFilter`, `ComputeFilter`, `ComputeCapabilitiesFilter`, `ImagePropertiesFilter`, `ExactRamFilter`, `ExactDiskFilter` and `ExactCoreFilter`.
 
-    The Python script `create-bare-metal-flavors.py` from this repository iterates over all Ironic nodes that are inspected and creates a flavor with the name of the Ironic node for each one.
-
-    **NOTE**: `ironic-inspector` doesn't recognize `Hyper-V` Ironic nodes set in UEFI mode. So you'll need to manually update the Ironic node + its corresponding flavor with some extra properties:
-
-    ```
-    ironic node-update <NODE_NAME> add properties/capabilities='boot_mode:uefi,boot_option:local'
-    nova flavor-key <NODE_NAME> set capabilities:boot_mode="uefi"
-    nova flavor-key <NODE_NAME> set capabilities:boot_option="local"
-    ```
+    So, we will need flavors to match exactly the Ironic node properties. The Python script `create-bare-metal-flavors.py` from this repository iterates over all Ironic nodes that are inspected and creates a flavor with the name of the Ironic node for each one.
 
 5. Edit `~/.juju/environments.yaml` and complete the details for the Juju openstack provider. (sample of the file can be found on this repository)
 
