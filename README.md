@@ -80,7 +80,7 @@
 
         sudo apt-get install python-pip -y
         sudo pip install pywinrm
-        git clone https://github.com/ionutbalutoiu/ironic -b master /tmp/hyper-v-driver
+        git clone https://github.com/ionutbalutoiu/ironic -b hyper-v-driver /tmp/hyper-v-driver
         pushd /tmp/hyper-v-driver
         sudo pip install -r requirements.txt
         sudo python setup.py install
